@@ -1,5 +1,4 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   useGetUsersQuery,
   useDeleteUserMutation,
@@ -9,12 +8,10 @@ import {
   useGetUserSchemaQuery,
   useCreateUserMutation,
   useUpdateUserMutation,
-  useGetAdminListQuery,
-  useAssignUserToAdminMutation,
-  useUnassignUserMutation,
 } from "../lib/services/usersApi";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
+import { UserForm } from "../components/users/user-form";
 import { Badge } from "../components/ui/badge";
 import { Checkbox } from "../components/ui/checkbox";
 import {
@@ -87,9 +84,6 @@ const statusConfig = {
 };
 
 export function UsersPage() {
-  const navigate = useNavigate();
-  const { toast } = useToast();
-
   // State
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -104,6 +98,8 @@ export function UsersPage() {
   const [selectedUserForAdmin, setSelectedUserForAdmin] = useState(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState("csv");
+
+  const { toast } = useToast();
 
   // Queries and Mutations
   const {
@@ -138,21 +134,48 @@ export function UsersPage() {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // Dynamic columns based on schema
+  // Column definitions
   const columns = useMemo(() => {
     if (!schemaData?.fields) return [];
 
-    return Object.entries(schemaData.fields)
-      .filter(([fieldName]) => !["password", "__v"].includes(fieldName))
+    // Start with standard fields from schema
+    let cols = Object.entries(schemaData.fields)
+      .filter(
+        ([fieldName]) => !["password", "__v", "metadata"].includes(fieldName)
+      )
       .map(([fieldName, fieldSchema]) => ({
         key: fieldName,
         label:
           fieldSchema.label ||
           fieldName.charAt(0).toUpperCase() + fieldName.slice(1),
-        type: fieldSchema.type,
+        type:
+          fieldName === "assignedAdmin"
+            ? "admin"
+            : fieldSchema.type.toLowerCase(),
         sortable: fieldSchema.sortable !== false,
         filterable: fieldSchema.filterable !== false,
       }));
+
+    // Define the preferred order of columns
+    const columnOrder = [
+      "name",
+      "number",
+      "status",
+      "assignedAdmin",
+      "createdAt",
+      "updatedAt",
+    ];
+
+    // Sort columns according to the order
+    cols.sort((a, b) => {
+      const indexA = columnOrder.indexOf(a.key);
+      const indexB = columnOrder.indexOf(b.key);
+      if (indexA === -1) return 1;
+      if (indexB === -1) return -1;
+      return indexA - indexB;
+    });
+
+    return cols;
   }, [schemaData]);
 
   // Handlers
@@ -191,6 +214,7 @@ export function UsersPage() {
       });
     }
   };
+
   const handleStatusUpdate = async (userId, status) => {
     try {
       if (userId) {
@@ -258,6 +282,11 @@ export function UsersPage() {
   const renderCell = (user, column) => {
     const value = user[column.key];
 
+    // Handle null or undefined values
+    if (value === null || value === undefined) {
+      return "-";
+    }
+
     switch (column.type.toLowerCase()) {
       case "boolean":
         return value ? "Yes" : "No";
@@ -278,14 +307,30 @@ export function UsersPage() {
         );
       }
 
+      case "admin": // Special case for assignedAdmin field
+        if (!value) return "-";
+        return (
+          <div className="flex items-center gap-2">
+            <span className="font-medium">{value.username}</span>
+            <span className="text-xs text-muted-foreground">
+              ({value.email})
+            </span>
+          </div>
+        );
+
       case "array":
         return Array.isArray(value) ? value.join(", ") : "-";
 
       case "object":
-        return value ? JSON.stringify(value) : "-";
+        if (value === null) return "-";
+        try {
+          return JSON.stringify(value);
+        } catch (e) {
+          return "-";
+        }
 
       default:
-        return value || "-";
+        return String(value);
     }
   };
 
@@ -336,6 +381,7 @@ export function UsersPage() {
           </div>
         </div>
       </div>
+
       {/* Toolbar */}
       <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex h-14 items-center px-4 gap-4">
@@ -567,6 +613,7 @@ export function UsersPage() {
           </table>
         )}
       </div>
+
       {/* Pagination */}
       {usersData?.pagination && (
         <div className="border-t">
@@ -666,23 +713,25 @@ export function UsersPage() {
       </Dialog>
 
       {/* User Form Sidebar */}
-      <RightSidebar
-        open={isUserSidebarOpen}
-        onClose={() => {
-          setIsUserSidebarOpen(false);
-          setSelectedUser(null);
-        }}
-        title={selectedUser ? "Edit User" : "Add User"}
-      >
-        <UserForm
-          user={selectedUser}
-          schema={schemaData?.fields}
+      {isUserSidebarOpen && (
+        <RightSidebar
+          open={isUserSidebarOpen}
           onClose={() => {
             setIsUserSidebarOpen(false);
             setSelectedUser(null);
           }}
-        />
-      </RightSidebar>
+          title={selectedUser ? "Edit User" : "Add User"}
+        >
+          <UserForm
+            user={selectedUser}
+            schema={schemaData?.fields}
+            onClose={() => {
+              setIsUserSidebarOpen(false);
+              setSelectedUser(null);
+            }}
+          />
+        </RightSidebar>
+      )}
 
       {/* Schema Management Sidebar */}
       <RightSidebar
@@ -705,149 +754,5 @@ export function UsersPage() {
         }}
       />
     </div>
-  );
-}
-
-// User Form Component
-function UserForm({ user, schema, onClose }) {
-  const [createUser, { isLoading: isCreating }] = useCreateUserMutation();
-  const [updateUser, { isLoading: isUpdating }] = useUpdateUserMutation();
-  const { toast } = useToast();
-
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    const formData = new FormData(event.target);
-    const data = Object.fromEntries(formData.entries());
-
-    // Convert boolean fields
-    Object.entries(schema).forEach(([fieldName, fieldSchema]) => {
-      if (fieldSchema.type === "boolean") {
-        data[fieldName] = formData.get(fieldName) === "on";
-      }
-    });
-
-    try {
-      if (user) {
-        await updateUser({ id: user._id, ...data }).unwrap();
-        toast({
-          title: "Success",
-          description: "User updated successfully",
-        });
-      } else {
-        await createUser(data).unwrap();
-        toast({
-          title: "Success",
-          description: "User created successfully",
-        });
-      }
-      onClose();
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: error.data?.message || "Failed to save user",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const renderField = (fieldName, fieldSchema) => {
-    const commonProps = {
-      id: fieldName,
-      name: fieldName,
-      defaultValue: user?.[fieldName] || "",
-      required: fieldSchema.required,
-      className: "w-full",
-    };
-
-    switch (fieldSchema.type.toLowerCase()) {
-      case "string":
-        if (fieldSchema.enum) {
-          return (
-            <Select {...commonProps}>
-              <SelectTrigger>
-                <SelectValue placeholder={`Select ${fieldName}`} />
-              </SelectTrigger>
-              <SelectContent>
-                {fieldSchema.enum.map((option) => (
-                  <SelectItem key={option} value={option}>
-                    {option}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          );
-        }
-        return <Input type="text" {...commonProps} />;
-
-      case "number":
-        return <Input type="number" {...commonProps} />;
-
-      case "boolean":
-        return (
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id={fieldName}
-              name={fieldName}
-              defaultChecked={user?.[fieldName] || false}
-            />
-          </div>
-        );
-
-      case "date":
-        return <Input type="date" {...commonProps} />;
-
-      case "email":
-        return <Input type="email" {...commonProps} />;
-
-      case "password":
-        return <Input type="password" {...commonProps} required={!user} />;
-
-      default:
-        return <Input type="text" {...commonProps} />;
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="grid gap-6">
-        {Object.entries(schema || {}).map(([fieldName, fieldSchema]) => (
-          <div key={fieldName} className="space-y-2">
-            <label
-              htmlFor={fieldName}
-              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-            >
-              {fieldSchema.label || fieldName}
-              {fieldSchema.required && (
-                <span className="text-destructive ml-1">*</span>
-              )}
-            </label>
-            {renderField(fieldName, fieldSchema)}
-            {fieldSchema.description && (
-              <p className="text-sm text-muted-foreground">
-                {fieldSchema.description}
-              </p>
-            )}
-          </div>
-        ))}
-      </div>
-
-      <div className="flex items-center justify-end space-x-2">
-        <Button type="button" variant="outline" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button type="submit" disabled={isCreating || isUpdating}>
-          {isCreating || isUpdating ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              {user ? "Updating..." : "Creating..."}
-            </>
-          ) : user ? (
-            "Update"
-          ) : (
-            "Create"
-          )}
-        </Button>
-      </div>
-    </form>
   );
 }

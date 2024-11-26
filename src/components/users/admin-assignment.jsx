@@ -30,12 +30,9 @@ export function AdminAssignmentDialog({ open, onClose, user, onSuccess }) {
   const { toast } = useToast();
   const [selectedAdmin, setSelectedAdmin] = React.useState(UNASSIGNED_VALUE);
 
-  const { data: adminListResponse, isLoading: isLoadingAdmins } =
-    useGetAdminListQuery();
-  const [assignAdmin, { isLoading: isAssigning }] =
-    useAssignUserToAdminMutation();
-  const [unassignUser, { isLoading: isUnassigning }] =
-    useUnassignUserMutation();
+  const { data: adminListResponse, isLoading: isLoadingAdmins } = useGetAdminListQuery();
+  const [assignAdmin, { isLoading: isAssigning }] = useAssignUserToAdminMutation();
+  const [unassignUser, { isLoading: isUnassigning }] = useUnassignUserMutation();
 
   const adminList = adminListResponse?.admins || [];
 
@@ -72,9 +69,50 @@ export function AdminAssignmentDialog({ open, onClose, user, onSuccess }) {
 
   React.useEffect(() => {
     if (open && user) {
-      setSelectedAdmin(user.assignedAdmin || UNASSIGNED_VALUE);
+      setSelectedAdmin(user.assignedAdmin?._id || UNASSIGNED_VALUE);
     }
   }, [open, user]);
+
+  const renderSelectContent = () => {
+    if (isLoadingAdmins) {
+      return (
+        <div className="flex items-center justify-center py-4">
+          <Loader2 className="h-6 w-6 animate-spin" />
+        </div>
+      );
+    }
+
+    return (
+      <Select 
+        value={selectedAdmin} 
+        onValueChange={setSelectedAdmin}
+      >
+        <SelectTrigger>
+          <SelectValue placeholder="Select an admin">
+            {selectedAdmin === UNASSIGNED_VALUE 
+              ? "None (Remove Assignment)"
+              : adminList.find(admin => admin._id === selectedAdmin)?.username || "Select an admin"
+            }
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            <SelectItem value={UNASSIGNED_VALUE}>
+              None (Remove Assignment)
+            </SelectItem>
+            {adminList.map(admin => (
+              <SelectItem 
+                key={`admin-${admin._id}`} 
+                value={admin._id}
+              >
+                {admin.username}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+    );
+  };
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -89,34 +127,13 @@ export function AdminAssignmentDialog({ open, onClose, user, onSuccess }) {
         <div className="grid gap-4 py-4">
           <div className="space-y-2">
             <label className="text-sm font-medium">Select Admin</label>
-            {isLoadingAdmins ? (
-              <div className="flex items-center justify-center py-4">
-                <Loader2 className="h-6 w-6 animate-spin" />
-              </div>
-            ) : (
-              <Select value={selectedAdmin} onValueChange={setSelectedAdmin}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select an admin" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value={UNASSIGNED_VALUE}>
-                      None (Remove Assignment)
-                    </SelectItem>
-                    {adminList.map((admin) => (
-                      <SelectItem key={`admin-${admin._id}`} value={admin._id}>
-                        {admin.name || admin.username}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            )}
+            {renderSelectContent()}
           </div>
         </div>
 
         <DialogFooter>
           <Button
+            type="button"
             variant="outline"
             onClick={onClose}
             disabled={isAssigning || isUnassigning}
@@ -124,6 +141,7 @@ export function AdminAssignmentDialog({ open, onClose, user, onSuccess }) {
             Cancel
           </Button>
           <Button
+            type="button"
             onClick={handleAssignment}
             disabled={isAssigning || isUnassigning}
           >

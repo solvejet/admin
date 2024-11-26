@@ -36,12 +36,13 @@ const MainNav = ({ items, className, ...props }) => {
           key={item.href}
           to={item.href}
           className={cn(
-            "text-sm font-medium transition-colors hover:text-primary",
+            "flex items-center gap-2 text-sm font-medium transition-colors hover:text-primary",
             location.pathname === item.href
               ? "text-primary"
               : "text-muted-foreground"
           )}
         >
+          {item.icon && <item.icon className="h-4 w-4" />}
           {item.title}
         </Link>
       ))}
@@ -49,23 +50,47 @@ const MainNav = ({ items, className, ...props }) => {
   );
 };
 
-const SidebarItem = ({ icon: Icon, title, href, isActive }) => (
-  <Link
-    to={href}
-    className={cn(
-      "flex items-center gap-x-2 text-sm font-semibold rounded-lg px-3 py-2 transition-colors",
-      isActive
-        ? "bg-primary/10 text-primary hover:bg-primary/15"
-        : "text-muted-foreground hover:bg-muted hover:text-foreground"
-    )}
-  >
-    <Icon className="h-5 w-5" />
-    {title}
-  </Link>
-);
+const MobileNav = ({ items, isOpen, onClose }) => {
+  const location = useLocation();
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-background md:hidden">
+      <div className="flex h-16 items-center justify-between px-4 border-b">
+        <div className="flex items-center">
+          <span className="font-bold">Pixe Admin</span>
+        </div>
+        <button onClick={onClose} className="p-2 hover:bg-muted rounded-md">
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+      <div className="p-4">
+        <nav className="flex flex-col space-y-2">
+          {items.map((item) => (
+            <Link
+              key={item.href}
+              to={item.href}
+              onClick={onClose}
+              className={cn(
+                "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-muted",
+                location.pathname === item.href
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground"
+              )}
+            >
+              {item.icon && <item.icon className="h-4 w-4" />}
+              {item.title}
+            </Link>
+          ))}
+        </nav>
+      </div>
+    </div>
+  );
+};
 
 const Layout = () => {
-  const [isSidebarOpen, setSidebarOpen] = useState(false);
+  const [isMobileNavOpen, setMobileNavOpen] = useState(false);
   const [isProfileOpen, setProfileOpen] = useState(false);
   const [isSearchOpen, setSearchOpen] = useState(false);
   const user = useSelector(selectCurrentUser);
@@ -78,14 +103,7 @@ const Layout = () => {
     navigate("/login");
   };
 
-  const mainMenuItems = [
-    { title: "Overview", href: "/" },
-    { title: "Customers", href: "/customers" },
-    { title: "Analytics", href: "/analytics" },
-    { title: "Reports", href: "/reports" },
-  ];
-
-  const sidebarItems = [
+  const navigationItems = [
     { icon: LayoutDashboard, title: "Dashboard", href: "/" },
     { icon: Users, title: "Users", href: "/users" },
     { icon: Shield, title: "Roles", href: "/roles" },
@@ -98,6 +116,7 @@ const Layout = () => {
       if (e.key === "Escape") {
         setSearchOpen(false);
         setProfileOpen(false);
+        setMobileNavOpen(false);
       }
     };
 
@@ -107,118 +126,105 @@ const Layout = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
+      {/* Main Header */}
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-14 items-center">
-          <div className="mr-4 hidden md:flex">
-            <Link to="/" className="mr-6 flex items-center space-x-2">
-              <span className="hidden font-bold sm:inline-block">
-                Pixe Admin
-              </span>
-            </Link>
-            <MainNav items={mainMenuItems} />
-          </div>
-          <button
-            className="mr-2 px-0 text-base hover:bg-transparent focus:ring-0 md:hidden"
-            onClick={() => setSidebarOpen(true)}
-          >
-            <Menu className="h-6 w-6" />
-            <span className="sr-only">Open sidebar</span>
-          </button>
-
-          <div className="flex flex-1 items-center justify-end space-x-4">
-            <button
-              onClick={() => setSearchOpen(true)}
-              className="p-2 hover:bg-muted rounded-full"
-            >
-              <Search className="h-5 w-5" />
-            </button>
-
-            <button className="p-2 hover:bg-muted rounded-full relative">
-              <BellRing className="h-5 w-5" />
-              <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-primary" />
-            </button>
-
-            <ThemeToggle />
-
-            <div className="relative">
+        <div className="container px-4">
+          {/* Top Bar */}
+          <div className="flex h-16 items-center justify-between">
+            <div className="flex items-center gap-6">
+              {/* Mobile menu button */}
               <button
-                onClick={() => setProfileOpen(!isProfileOpen)}
-                className="flex items-center gap-2 rounded-full bg-muted p-2"
+                className="p-2 hover:bg-muted rounded-md md:hidden"
+                onClick={() => setMobileNavOpen(true)}
               >
-                <UserCircle className="h-6 w-6" />
-                <span className="hidden text-sm font-medium md:inline-block">
-                  {user?.username}
-                </span>
-                <ChevronDown className="h-4 w-4" />
+                <Menu className="h-5 w-5" />
               </button>
 
-              {isProfileOpen && (
-                <div className="absolute right-0 mt-2 w-64 rounded-lg border bg-card p-1 shadow-lg">
-                  <div className="p-2">
-                    <p className="text-sm font-medium">{user?.username}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {user?.email}
-                    </p>
+              {/* Logo */}
+              <Link to="/" className="flex items-center gap-2">
+                <span className="font-bold">Pixe Admin</span>
+              </Link>
+
+              {/* Desktop Navigation */}
+              <div className="hidden md:flex">
+                <MainNav items={navigationItems} />
+              </div>
+            </div>
+
+            {/* Right side actions */}
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => setSearchOpen(true)}
+                className="p-2 hover:bg-muted rounded-full"
+              >
+                <Search className="h-5 w-5" />
+              </button>
+
+              <button className="p-2 hover:bg-muted rounded-full relative">
+                <BellRing className="h-5 w-5" />
+                <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-primary" />
+              </button>
+
+              <ThemeToggle />
+
+              {/* Profile Dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setProfileOpen(!isProfileOpen)}
+                  className="flex items-center gap-2 rounded-full bg-muted p-2"
+                >
+                  <UserCircle className="h-6 w-6" />
+                  <span className="hidden text-sm font-medium md:inline-block">
+                    {user?.username}
+                  </span>
+                  <ChevronDown className="h-4 w-4" />
+                </button>
+
+                {isProfileOpen && (
+                  <div className="absolute right-0 mt-2 w-64 rounded-lg border bg-card p-1 shadow-lg">
+                    <div className="p-2">
+                      <p className="text-sm font-medium">{user?.username}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {user?.email}
+                      </p>
+                    </div>
+                    <div className="h-px bg-muted my-1" />
+                    <button
+                      onClick={() => {
+                        setProfileOpen(false);
+                        navigate("/profile");
+                      }}
+                      className="w-full flex items-center gap-2 rounded-md p-2 text-sm hover:bg-muted"
+                    >
+                      <User className="h-4 w-4" />
+                      Profile Settings
+                    </button>
+                    <button
+                      onClick={handleLogout}
+                      className="w-full flex items-center gap-2 rounded-md p-2 text-sm text-destructive hover:bg-destructive/10"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      Sign Out
+                    </button>
                   </div>
-                  <div className="h-px bg-muted my-1" />
-                  <button
-                    onClick={() => {
-                      setProfileOpen(false);
-                      navigate("/profile");
-                    }}
-                    className="w-full flex items-center gap-2 rounded-md p-2 text-sm hover:bg-muted"
-                  >
-                    <User className="h-4 w-4" />
-                    Profile Settings
-                  </button>
-                  <button
-                    onClick={handleLogout}
-                    className="w-full flex items-center gap-2 rounded-md p-2 text-sm text-destructive hover:bg-destructive/10"
-                  >
-                    <LogOut className="h-4 w-4" />
-                    Sign Out
-                  </button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Sidebar */}
-      <div
-        className={cn(
-          "fixed inset-y-0 left-0 z-50 w-64 bg-background border-r transition-transform duration-300 ease-in-out lg:translate-x-0",
-          isSidebarOpen ? "translate-x-0" : "-translate-x-full"
-        )}
-      >
-        <div className="flex h-14 items-center border-b px-4 lg:hidden">
-          <button
-            onClick={() => setSidebarOpen(false)}
-            className="p-2 hover:bg-muted rounded-md"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="flex flex-col gap-2 p-4">
-          {sidebarItems.map((item) => (
-            <SidebarItem
-              key={item.href}
-              {...item}
-              isActive={location.pathname === item.href}
-            />
-          ))}
-        </div>
-      </div>
+      {/* Mobile Navigation */}
+      <MobileNav
+        items={navigationItems}
+        isOpen={isMobileNavOpen}
+        onClose={() => setMobileNavOpen(false)}
+      />
 
       {/* Main Content */}
-      <div className="lg:pl-64">
-        <main className="container py-6">
-          <Outlet />
-        </main>
-      </div>
+      <main className="container py-6 px-4">
+        <Outlet />
+      </main>
 
       {/* Search Modal */}
       {isSearchOpen && (
