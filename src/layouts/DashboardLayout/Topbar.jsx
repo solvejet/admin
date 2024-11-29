@@ -16,7 +16,7 @@ import {
   X,
 } from "lucide-react";
 import useAuthStore from "@/store/authStore";
-import SolvejetLogo from "@/components/SolvejetLogo";
+import SolvejetLogo from "@/components/SolveJetLogo";
 import React from "react";
 import { ROLES } from "@/utils/roleUtils";
 

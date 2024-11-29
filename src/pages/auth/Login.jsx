@@ -6,7 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { ROLE_ROUTES } from "@/utils/roleUtils";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
-import SolvejetLogo from "@/components/SolvejetLogo";
+import SolvejetLogo from "@/components/SolveJetLogo";
 
 const Login = () => {
   const [formData, setFormData] = useState({ email: "", password: "" });
