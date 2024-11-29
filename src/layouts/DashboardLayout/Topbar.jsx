@@ -18,19 +18,45 @@ import {
 import useAuthStore from "@/store/authStore";
 import SolvejetLogo from "@/components/SolvejetLogo";
 import React from "react";
+import { ROLES } from "@/utils/roleUtils";
 
-// Temporary static navigation items
 const navigationItems = [
-  { name: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
-  { name: "Manage Admins", href: "/admin/manage", icon: Shield },
-  { name: "Users", href: "/admin/users", icon: Users },
-  { name: "Reports", href: "/admin/reports", icon: FileText },
-  { name: "Settings", href: "/admin/settings", icon: Settings },
+  {
+    name: "Dashboard",
+    href: "/admin/dashboard",
+    icon: LayoutDashboard,
+    allowedRoles: [ROLES.ADMIN],
+  },
+  {
+    name: "Manage Admins",
+    href: "/admin/manage",
+    icon: Shield,
+    allowedRoles: [ROLES.ADMIN],
+  },
+  {
+    name: "Users",
+    href: "/admin/users",
+    icon: Users,
+    allowedRoles: [ROLES.ADMIN],
+  },
+  {
+    name: "Reports",
+    href: "/admin/reports",
+    icon: FileText,
+    allowedRoles: [ROLES.ADMIN],
+  },
+  {
+    name: "Settings",
+    href: "/admin/settings",
+    icon: Settings,
+    allowedRoles: [ROLES.ADMIN],
+  },
 ];
 
 export const Topbar = ({ onSignOut }) => {
   const location = useLocation();
   const user = useAuthStore((state) => state.user);
+  const role = useAuthStore((state) => state.role);
   const [darkMode, setDarkMode] = React.useState(
     document.documentElement.classList.contains("dark")
   );
@@ -42,6 +68,10 @@ export const Topbar = ({ onSignOut }) => {
     document.documentElement.classList.toggle("dark");
     localStorage.setItem("darkMode", newMode);
   };
+
+  const filteredNavItems = navigationItems.filter((item) =>
+    item.allowedRoles.includes(role)
+  );
 
   return (
     <div className="fixed top-0 left-0 right-0 z-10">
@@ -69,7 +99,7 @@ export const Topbar = ({ onSignOut }) => {
 
             {/* Desktop Navigation */}
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-              {navigationItems.map((item) => {
+              {filteredNavItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = location.pathname === item.href;
                 return (
@@ -89,7 +119,7 @@ export const Topbar = ({ onSignOut }) => {
               })}
             </div>
 
-            {/* Right side buttons */}
+            {/* Right side items */}
             <div className="flex items-center space-x-4">
               {/* Theme Toggle */}
               <button
@@ -112,7 +142,7 @@ export const Topbar = ({ onSignOut }) => {
                 <Bell className="h-6 w-6" />
               </button>
 
-              {/* Profile dropdown */}
+              {/* Profile dropdown continued */}
               <Menu as="div" className="relative ml-3">
                 <Menu.Button className="flex rounded-full bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:bg-gray-800">
                   <span className="sr-only">Open user menu</span>
@@ -165,7 +195,7 @@ export const Topbar = ({ onSignOut }) => {
         >
           <div className="sm:hidden">
             <div className="space-y-1 pb-3 pt-2">
-              {navigationItems.map((item) => {
+              {filteredNavItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = location.pathname === item.href;
                 return (

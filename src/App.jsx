@@ -9,17 +9,14 @@ import {
 import { onAuthStateChanged } from "firebase/auth";
 import React from "react";
 import { Helmet } from "react-helmet-async";
-import { QueryErrorResetBoundary } from "@tanstack/react-query";
-import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // Hooks
 import { usePWA } from "@/hooks/usePWA";
-import { useAuth } from "@/hooks/useAuth";
 import usePageTracking from "@/hooks/usePageTracking";
 
 // Config & Utils
 import { auth } from "@/config/firebase";
-import { getUserRole } from "@/utils/roleUtils";
+import { getUserRole, ROLES } from "@/utils/roleUtils";
 
 // Store
 import useAuthStore from "@/store/authStore";
@@ -29,6 +26,7 @@ import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { Alert } from "@/components/ui/Alert";
 import { Toast } from "@/components/ui/Toast";
 import { OfflineBanner } from "@/components/OfflineBanner";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // Layouts
 const DashboardLayout = lazy(() => import("@/layouts/DashboardLayout"));
@@ -43,23 +41,6 @@ const VendorDashboard = lazy(() => import("@/pages/vendor/Dashboard"));
 const SalesDashboard = lazy(() => import("@/pages/sales/Dashboard"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
-// Error Fallback Component
-const ErrorFallback = ({ error, resetErrorBoundary }) => (
-  <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-    <div className="max-w-md w-full px-4">
-      <Alert
-        type="error"
-        title="Something went wrong"
-        message={error.message}
-        action={{
-          label: "Try again",
-          onClick: resetErrorBoundary,
-        }}
-      />
-    </div>
-  </div>
-);
-
 // Loading Fallback Component
 const LoadingFallback = () => (
   <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
@@ -73,51 +54,119 @@ const PageTracker = () => {
   return null;
 };
 
-// Protected Route Component (kept for future use)
-const ProtectedRoute = ({ children, allowedRoles, title }) => {
-  const { user, role, loading } = useAuthStore();
+// Protected Route Component with Role-Based Access Control
+const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   const location = useLocation();
+  const { user, role, loading } = useAuthStore();
 
   if (loading) {
     return <LoadingFallback />;
   }
 
-  if (!user || !allowedRoles.includes(role)) {
+  if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (allowedRoles.length > 0 && !allowedRoles.includes(role)) {
+    return <Navigate to="/unauthorized" replace />;
   }
 
   return children;
 };
 
+// Public Route Component
+const PublicRoute = ({ children }) => {
+  const { user, role } = useAuthStore();
+  const location = useLocation();
+
+  if (user && role) {
+    const destination = location.state?.from || `/${role}/dashboard`;
+    return <Navigate to={destination} replace />;
+  }
+
+  return children;
+};
+
+// Unauthorized Access Component
+const UnauthorizedAccess = () => (
+  <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+    <div className="max-w-md w-full px-4">
+      <Alert
+        type="error"
+        title="Unauthorized Access"
+        message="You don't have permission to access this page."
+        action={{
+          label: "Go Back",
+          onClick: () => window.history.back(),
+        }}
+      />
+    </div>
+  </div>
+);
+
 function App() {
   const { isOnline, isUpdateAvailable, updateServiceWorker } = usePWA();
-  const { loading } = useAuthStore();
+  const [authInitialized, setAuthInitialized] = React.useState(false);
 
   // Handle auth state changes
   React.useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        try {
+      try {
+        if (user) {
           const role = await getUserRole(user.uid);
-          useAuthStore.setState({ user, role, loading: false });
-        } catch (error) {
-          console.error("Error fetching user role:", error);
-          useAuthStore.setState({ user: null, role: null, loading: false });
+          if (role) {
+            useAuthStore.setState({
+              user,
+              role,
+              loading: false,
+              isInitialized: true,
+            });
+          } else {
+            await auth.signOut();
+            useAuthStore.setState({
+              user: null,
+              role: null,
+              loading: false,
+              isInitialized: true,
+              error: "No role assigned to user",
+            });
+          }
+        } else {
+          useAuthStore.setState({
+            user: null,
+            role: null,
+            loading: false,
+            isInitialized: true,
+          });
         }
-      } else {
-        useAuthStore.setState({ user: null, role: null, loading: false });
+      } catch (error) {
+        console.error("Error fetching user role:", error);
+        useAuthStore.setState({
+          user: null,
+          role: null,
+          loading: false,
+          isInitialized: true,
+          error: error.message,
+        });
+      } finally {
+        setAuthInitialized(true);
       }
     });
 
     return () => unsubscribe();
   }, []);
 
-  if (loading) {
-    return <LoadingFallback />;
+  // Show initial loading state
+  if (!authInitialized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
   }
 
   return (
-    <ErrorBoundary FallbackComponent={ErrorFallback}>
+    <ErrorBoundary>
       <Router>
         <Helmet
           titleTemplate="%s | SolveJet Admin"
@@ -133,9 +182,11 @@ function App() {
             <Route
               path="/login"
               element={
-                <Suspense fallback={<LoadingFallback />}>
-                  <Login />
-                </Suspense>
+                <PublicRoute>
+                  <Suspense fallback={<LoadingFallback />}>
+                    <Login />
+                  </Suspense>
+                </PublicRoute>
               }
             />
           </Route>
@@ -144,11 +195,12 @@ function App() {
           <Route
             path="/admin"
             element={
-              <Suspense fallback={<LoadingFallback />}>
+              <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>
                 <DashboardLayout />
-              </Suspense>
+              </ProtectedRoute>
             }
           >
+            <Route index element={<Navigate to="/admin/dashboard" replace />} />
             <Route
               path="dashboard"
               element={
@@ -165,17 +217,22 @@ function App() {
                 </Suspense>
               }
             />
+            <Route
+              path="*"
+              element={<Navigate to="/admin/dashboard" replace />}
+            />
           </Route>
 
           {/* HR Routes */}
           <Route
             path="/hr"
             element={
-              <Suspense fallback={<LoadingFallback />}>
+              <ProtectedRoute allowedRoles={[ROLES.HR]}>
                 <DashboardLayout />
-              </Suspense>
+              </ProtectedRoute>
             }
           >
+            <Route index element={<Navigate to="/hr/dashboard" replace />} />
             <Route
               path="dashboard"
               element={
@@ -184,17 +241,22 @@ function App() {
                 </Suspense>
               }
             />
+            <Route path="*" element={<Navigate to="/hr/dashboard" replace />} />
           </Route>
 
           {/* Vendor Routes */}
           <Route
             path="/vendor"
             element={
-              <Suspense fallback={<LoadingFallback />}>
+              <ProtectedRoute allowedRoles={[ROLES.VENDOR]}>
                 <DashboardLayout />
-              </Suspense>
+              </ProtectedRoute>
             }
           >
+            <Route
+              index
+              element={<Navigate to="/vendor/dashboard" replace />}
+            />
             <Route
               path="dashboard"
               element={
@@ -203,17 +265,22 @@ function App() {
                 </Suspense>
               }
             />
+            <Route
+              path="*"
+              element={<Navigate to="/vendor/dashboard" replace />}
+            />
           </Route>
 
           {/* Sales Routes */}
           <Route
             path="/sales"
             element={
-              <Suspense fallback={<LoadingFallback />}>
+              <ProtectedRoute allowedRoles={[ROLES.SALES]}>
                 <DashboardLayout />
-              </Suspense>
+              </ProtectedRoute>
             }
           >
+            <Route index element={<Navigate to="/sales/dashboard" replace />} />
             <Route
               path="dashboard"
               element={
@@ -222,7 +289,14 @@ function App() {
                 </Suspense>
               }
             />
+            <Route
+              path="*"
+              element={<Navigate to="/sales/dashboard" replace />}
+            />
           </Route>
+
+          {/* Special Routes */}
+          <Route path="/unauthorized" element={<UnauthorizedAccess />} />
 
           {/* Root redirect */}
           <Route
@@ -230,7 +304,7 @@ function App() {
             element={
               <Navigate
                 to={
-                  useAuthStore.getState().user
+                  useAuthStore.getState().user && useAuthStore.getState().role
                     ? `/${useAuthStore.getState().role}/dashboard`
                     : "/login"
                 }

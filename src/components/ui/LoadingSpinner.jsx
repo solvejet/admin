@@ -1,7 +1,7 @@
 // src/components/ui/LoadingSpinner.jsx
-import * as Progress from "@radix-ui/react-progress";
+import { cn } from "@/lib/utils";
 
-export const LoadingSpinner = ({ size = "md" }) => {
+export const LoadingSpinner = ({ size = "md", className }) => {
   const sizeClasses = {
     sm: "h-4 w-4",
     md: "h-8 w-8",
@@ -9,11 +9,16 @@ export const LoadingSpinner = ({ size = "md" }) => {
   };
 
   return (
-    <Progress.Root className={`relative rounded-full ${sizeClasses[size]}`}>
-      <Progress.Indicator
-        className="absolute inset-0 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"
-        style={{ transform: "translateZ(0)" }}
-      />
-    </Progress.Root>
+    <div
+      className={cn(
+        "animate-spin rounded-full border-2 border-current border-t-transparent text-blue-600 dark:text-blue-500",
+        sizeClasses[size],
+        className
+      )}
+      role="status"
+      aria-label="Loading"
+    >
+      <span className="sr-only">Loading...</span>
+    </div>
   );
 };

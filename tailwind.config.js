@@ -13,10 +13,16 @@ module.exports = {
           from: { opacity: 0, transform: "translate(-50%, -48%) scale(0.96)" },
           to: { opacity: 1, transform: "translate(-50%, -50%) scale(1)" },
         },
+        spin: {
+          to: {
+            transform: "rotate(360deg)",
+          },
+        },
       },
       animation: {
         fadeIn: "fadeIn 200ms ease-out",
         contentShow: "contentShow 200ms ease-out",
+        spin: "spin 1s linear infinite",
       },
     },
   },
