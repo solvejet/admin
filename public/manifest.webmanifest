@@ -1,0 +1,23 @@
+{
+  "name": "SolveJet Admin",
+  "short_name": "SolveJet",
+  "description": "SolveJet Admin Portal",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#186EBC",
+  "icons": [
+    {
+      "src": "pwa-icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "pwa-icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
